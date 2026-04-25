@@ -194,7 +194,7 @@ export default function DepositPage() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Months Completed</p>
+            <p className="text-sm text-muted-foreground">Deposits Made</p>
             <p className="text-2xl font-bold">{monthsCompleted ? monthsCompleted.toString() : '0'}</p>
           </CardContent>
         </Card>

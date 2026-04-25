@@ -16,8 +16,10 @@ contract DepositPool is IDepositPool, Ownable, ReentrancyGuard {
     mapping(address => uint256) public monthsCompleted;
     mapping(address => uint256) public accruedYield;
 
-    uint256 public constant GRACE_PERIOD = 30 days;
-    uint256 public constant LIQUIDATION_PERIOD = 60 days;
+    // For hackathon demo: short intervals so judges can deposit multiple times quickly
+    uint256 public constant DEPOSIT_INTERVAL = 10 seconds;
+    uint256 public constant GRACE_PERIOD = 30 seconds;
+    uint256 public constant LIQUIDATION_PERIOD = 60 seconds;
 
     event PlanCreated(address indexed student, uint256 tenorMonths, uint256 minimumDeposit);
     event Deposited(address indexed student, uint256 amount, uint256 month);
@@ -73,7 +75,7 @@ contract DepositPool is IDepositPool, Ownable, ReentrancyGuard {
 
     function getCurrentMonth(address student) public view returns (uint256) {
         if (!plans[student].active) return 0;
-        return (block.timestamp - plans[student].startTime) / 30 days;
+        return (block.timestamp - plans[student].startTime) / DEPOSIT_INTERVAL;
     }
 
     function getTotalDeposited(address student) external view returns (uint256) {

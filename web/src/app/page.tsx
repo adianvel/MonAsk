@@ -85,7 +85,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">${totalDeposited ? formatNumber(totalDeposited, 6) : '0.00'}</p>
-            <p className="text-xs text-muted-foreground mt-1">{monthsCompleted ? monthsCompleted.toString() : '0'} months completed</p>
+            <p className="text-xs text-muted-foreground mt-1">{monthsCompleted ? monthsCompleted.toString() : '0'} Deposits Made</p>
           </CardContent>
         </Card>
 
@@ -125,7 +125,7 @@ export default function Dashboard() {
                   Total deposited: ${totalDeposited ? formatNumber(totalDeposited, 6) : '0.00'}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Months completed: {monthsCompleted ? monthsCompleted.toString() : '0'}
+                  Deposits Made: {monthsCompleted ? monthsCompleted.toString() : '0'}
                 </p>
               </div>
             ) : (
