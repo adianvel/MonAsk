@@ -31,24 +31,6 @@ const STUDENT_IDENTITY_ABI = [
   },
 ] as const
 
-const DEPOSIT_PLAN_ABI = [
-  {
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
-    name: 'plans',
-    outputs: [
-      { internalType: 'address', name: 'student', type: 'address' },
-      { internalType: 'uint256', name: 'tenorMonths', type: 'uint256' },
-      { internalType: 'uint256', name: 'minimumDeposit', type: 'uint256' },
-      { internalType: 'uint256', name: 'startTime', type: 'uint256' },
-      { internalType: 'uint256', name: 'totalDeposited', type: 'uint256' },
-      { internalType: 'uint256', name: 'monthsCompleted', type: 'uint256' },
-      { internalType: 'bool', name: 'active', type: 'bool' },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const
-
 export default function DepositPage() {
   const { address, isConnected, chainId } = useAccount()
   const [tenor, setTenor] = useState('48')
@@ -78,10 +60,10 @@ export default function DepositPage() {
     query: { enabled: !!address },
   })
 
-  const { data: plan } = useReadContract({
+  const { data: isPlanActive, refetch: refetchPlan } = useReadContract({
     address: addresses.depositPool as `0x${string}`,
-    abi: DEPOSIT_PLAN_ABI,
-    functionName: 'plans',
+    abi: DEPOSIT_POOL_ABI,
+    functionName: 'isPlanActive',
     args: address ? [address] : undefined,
     query: { enabled: !!address },
   })
@@ -118,7 +100,7 @@ export default function DepositPage() {
     query: { enabled: !!address },
   })
 
-  const hasPlan = plan?.active
+  const hasPlan = isPlanActive
 
   const handleMint = () => {
     setError('')
@@ -152,6 +134,7 @@ export default function DepositPage() {
     }, {
       onSuccess: () => {
         setTimeout(() => {
+          refetchPlan()
           refetchDeposited()
           refetchMonths()
         }, 2000)
@@ -184,6 +167,7 @@ export default function DepositPage() {
     }, {
       onSuccess: () => {
         setTimeout(() => {
+          refetchPlan()
           refetchBalance()
           refetchDeposited()
           refetchMonths()
@@ -231,7 +215,7 @@ export default function DepositPage() {
               <div>
                 <p className="font-medium text-green-600 dark:text-green-400">Active Plan</p>
                 <p className="text-sm text-muted-foreground">
-                  Tenor: {plan?.tenorMonths.toString()} months | Min: ${formatNumber(plan?.minimumDeposit, 6)}/mo
+                  Your deposit plan is active. Make deposits in the Monthly Deposit tab.
                 </p>
               </div>
               <Badge variant="default">Active</Badge>
