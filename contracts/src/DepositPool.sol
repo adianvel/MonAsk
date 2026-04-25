@@ -36,7 +36,6 @@ contract DepositPool is IDepositPool, Ownable, ReentrancyGuard {
     }
 
     function createPlan(uint256 tenorMonths, uint256 minimumDeposit_) external {
-        require(identity.isVerified(msg.sender), "Not verified");
         require(!plans[msg.sender].active, "Plan exists");
         require(tenorMonths > 0, "Invalid tenor");
         require(minimumDeposit_ > 0, "Invalid min deposit");

@@ -55,7 +55,6 @@ contract MonAsk is Ownable, ReentrancyGuard {
     }
 
     function canBorrow(address student) public view returns (bool) {
-        require(identity.isVerified(student), "Not verified");
         require(depositPool.isPlanActive(student), "Plan not active");
         uint256 months = depositPool.getMonthsCompleted(student);
         require(months >= MIN_BORROW_MONTHS, "Need more deposits");
