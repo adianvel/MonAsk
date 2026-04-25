@@ -30,6 +30,7 @@ export default function DepositPage() {
   const addresses = isTestnet ? CONTRACT_ADDRESSES.monadTestnet : CONTRACT_ADDRESSES.monad
 
   const { writeContract: mintUsdc, isPending: isMinting } = useWriteContract()
+  const { writeContract: approveUsdc, isPending: isApproving } = useWriteContract()
   const { writeContract: createPlan, isPending: isCreating } = useWriteContract()
   const { writeContract: deposit, isPending: isDepositing } = useWriteContract()
 
@@ -57,6 +58,14 @@ export default function DepositPage() {
     query: { enabled: !!address },
   })
 
+  const { data: allowance } = useReadContract({
+    address: addresses.usdc as `0x${string}`,
+    abi: USDC_ABI,
+    functionName: 'allowance',
+    args: address ? [address, addresses.depositPool] : undefined,
+    query: { enabled: !!address },
+  })
+
   const handleMint = () => {
     if (!address) return
     mintUsdc({
@@ -76,6 +85,16 @@ export default function DepositPage() {
     })
   }
 
+  const handleApprove = () => {
+    if (!address) return
+    approveUsdc({
+      address: addresses.usdc as `0x${string}`,
+      abi: USDC_ABI,
+      functionName: 'approve',
+      args: [addresses.depositPool, parseUnits(depositAmount || '0', 6)],
+    })
+  }
+
   const handleDeposit = () => {
     deposit({
       address: addresses.depositPool as `0x${string}`,
@@ -84,6 +103,8 @@ export default function DepositPage() {
       args: [parseUnits(depositAmount, 6)],
     })
   }
+
+  const needsApproval = allowance !== undefined && parseUnits(depositAmount || '0', 6) > allowance
 
   if (!isConnected) {
     return (
@@ -223,11 +244,22 @@ export default function DepositPage() {
                   Your deposit will be auto-staked to earn yield.
                   You can borrow up to 70% of your total deposits.
                 </p>
+                {needsApproval && (
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                    You need to approve USDC spending before depositing.
+                  </p>
+                )}
               </div>
 
-              <Button className="w-full" size="lg" onClick={handleDeposit} disabled={isDepositing}>
-                {isDepositing ? 'Depositing...' : 'Deposit'}
-              </Button>
+              {needsApproval ? (
+                <Button className="w-full" size="lg" onClick={handleApprove} disabled={isApproving}>
+                  {isApproving ? 'Approving...' : 'Approve USDC'}
+                </Button>
+              ) : (
+                <Button className="w-full" size="lg" onClick={handleDeposit} disabled={isDepositing || !depositAmount}>
+                  {isDepositing ? 'Depositing...' : 'Deposit'}
+                </Button>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
