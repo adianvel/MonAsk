@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
@@ -101,6 +101,11 @@ export default function DepositPage() {
   })
 
   const hasPlan = isPlanActive
+  const [activeTab, setActiveTab] = useState(hasPlan ? 'deposit' : 'create')
+
+  useEffect(() => {
+    setActiveTab(hasPlan ? 'deposit' : 'create')
+  }, [hasPlan])
 
   const handleMint = () => {
     setError('')
@@ -273,7 +278,7 @@ export default function DepositPage() {
         </Card>
       )}
 
-      <Tabs defaultValue={hasPlan ? 'deposit' : 'create'} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="create">Create Plan</TabsTrigger>
           <TabsTrigger value="deposit">Monthly Deposit</TabsTrigger>
