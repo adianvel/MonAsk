@@ -1,8 +1,6 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { http } from 'wagmi'
 
-const projectId = '1026fa5dd36949d144ef5a9d4f135bb1'
-
 const monadTestnet = {
   id: 10143,
   name: 'Monad Testnet',
@@ -32,7 +30,7 @@ const monad = {
 
 export const config = getDefaultConfig({
   appName: 'MonAsk',
-  projectId,
+  projectId: '1026fa5dd36949d144ef5a9d4f135bb1',
   chains: [monad as any, monadTestnet as any],
   transports: {
     [monad.id]: http('https://rpc.monad.xyz'),
