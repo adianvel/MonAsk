@@ -1,0 +1,11 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.28"
+evm_version = "cancun"
+via_ir = true
+
+[etherscan]
+monad-testnet = { key = "", chain = 10143, url = "https://testnet.monadscan.xyz/api" }
+monad-mainnet = { key = "", chain = 143, url = "https://monadscan.xyz/api" }
