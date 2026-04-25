@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAccount, useWriteContract, useReadContract } from 'wagmi'
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import { formatNumber } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,16 +25,49 @@ export default function DepositPage() {
   const [minDeposit, setMinDeposit] = useState('10')
   const [depositAmount, setDepositAmount] = useState('')
   const [mintAmount, setMintAmount] = useState('1000')
+  const [lastHash, setLastHash] = useState<`0x${string}` | undefined>(undefined)
 
   const isTestnet = chainId === 10143
   const addresses = isTestnet ? CONTRACT_ADDRESSES.monadTestnet : CONTRACT_ADDRESSES.monad
 
-  const { writeContract: mintUsdc, isPending: isMinting } = useWriteContract()
-  const { writeContract: approveUsdc, isPending: isApproving } = useWriteContract()
-  const { writeContract: createPlan, isPending: isCreating } = useWriteContract()
-  const { writeContract: deposit, isPending: isDepositing } = useWriteContract()
+  const { writeContract: mintUsdc, isPending: isMinting, data: mintHash } = useWriteContract()
+  const { writeContract: approveUsdc, isPending: isApproving, data: approveHash } = useWriteContract()
+  const { writeContract: createPlan, isPending: isCreating, data: createHash } = useWriteContract()
+  const { writeContract: deposit, isPending: isDepositing, data: depositHash } = useWriteContract()
 
-  const { data: usdcBalance } = useReadContract({
+  useWaitForTransactionReceipt({
+    hash: mintHash,
+    query: {
+      enabled: !!mintHash,
+      meta: { refresh: true },
+    },
+  })
+
+  useWaitForTransactionReceipt({
+    hash: approveHash,
+    query: {
+      enabled: !!approveHash,
+      meta: { refresh: true },
+    },
+  })
+
+  useWaitForTransactionReceipt({
+    hash: createHash,
+    query: {
+      enabled: !!createHash,
+      meta: { refresh: true },
+    },
+  })
+
+  useWaitForTransactionReceipt({
+    hash: depositHash,
+    query: {
+      enabled: !!depositHash,
+      meta: { refresh: true },
+    },
+  })
+
+  const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
     address: addresses.usdc as `0x${string}`,
     abi: USDC_ABI,
     functionName: 'balanceOf',
@@ -42,7 +75,7 @@ export default function DepositPage() {
     query: { enabled: !!address },
   })
 
-  const { data: totalDeposited } = useReadContract({
+  const { data: totalDeposited, refetch: refetchDeposited } = useReadContract({
     address: addresses.depositPool as `0x${string}`,
     abi: DEPOSIT_POOL_ABI,
     functionName: 'getTotalDeposited',
@@ -50,7 +83,7 @@ export default function DepositPage() {
     query: { enabled: !!address },
   })
 
-  const { data: monthsCompleted } = useReadContract({
+  const { data: monthsCompleted, refetch: refetchMonths } = useReadContract({
     address: addresses.depositPool as `0x${string}`,
     abi: DEPOSIT_POOL_ABI,
     functionName: 'getMonthsCompleted',
@@ -58,7 +91,7 @@ export default function DepositPage() {
     query: { enabled: !!address },
   })
 
-  const { data: allowance } = useReadContract({
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: addresses.usdc as `0x${string}`,
     abi: USDC_ABI,
     functionName: 'allowance',
@@ -73,6 +106,10 @@ export default function DepositPage() {
       abi: USDC_ABI,
       functionName: 'mint',
       args: [address, parseUnits(mintAmount, 6)],
+    }, {
+      onSuccess: () => {
+        setTimeout(() => refetchBalance(), 2000)
+      }
     })
   }
 
@@ -82,6 +119,13 @@ export default function DepositPage() {
       abi: DEPOSIT_POOL_ABI,
       functionName: 'createPlan',
       args: [BigInt(tenor), parseUnits(minDeposit, 6)],
+    }, {
+      onSuccess: () => {
+        setTimeout(() => {
+          refetchDeposited()
+          refetchMonths()
+        }, 2000)
+      }
     })
   }
 
@@ -92,6 +136,10 @@ export default function DepositPage() {
       abi: USDC_ABI,
       functionName: 'approve',
       args: [addresses.depositPool, parseUnits(depositAmount || '0', 6)],
+    }, {
+      onSuccess: () => {
+        setTimeout(() => refetchAllowance(), 2000)
+      }
     })
   }
 
@@ -101,6 +149,15 @@ export default function DepositPage() {
       abi: DEPOSIT_POOL_ABI,
       functionName: 'deposit',
       args: [parseUnits(depositAmount, 6)],
+    }, {
+      onSuccess: () => {
+        setTimeout(() => {
+          refetchBalance()
+          refetchDeposited()
+          refetchMonths()
+          refetchAllowance()
+        }, 2000)
+      }
     })
   }
 
