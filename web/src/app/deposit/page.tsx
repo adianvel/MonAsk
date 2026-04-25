@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import { formatNumber } from '@/lib/utils'
@@ -10,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { CONTRACT_ADDRESSES, DEPOSIT_POOL_ABI, USDC_ABI } from '@/lib/contracts'
 
 const TENOR_OPTIONS = [
@@ -19,13 +21,41 @@ const TENOR_OPTIONS = [
   { value: '6', label: '6 Months' },
 ]
 
+const STUDENT_IDENTITY_ABI = [
+  {
+    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    name: 'isVerified',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
+
+const DEPOSIT_PLAN_ABI = [
+  {
+    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    name: 'plans',
+    outputs: [
+      { internalType: 'address', name: 'student', type: 'address' },
+      { internalType: 'uint256', name: 'tenorMonths', type: 'uint256' },
+      { internalType: 'uint256', name: 'minimumDeposit', type: 'uint256' },
+      { internalType: 'uint256', name: 'startTime', type: 'uint256' },
+      { internalType: 'uint256', name: 'totalDeposited', type: 'uint256' },
+      { internalType: 'uint256', name: 'monthsCompleted', type: 'uint256' },
+      { internalType: 'bool', name: 'active', type: 'bool' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
+
 export default function DepositPage() {
   const { address, isConnected, chainId } = useAccount()
   const [tenor, setTenor] = useState('48')
   const [minDeposit, setMinDeposit] = useState('10')
   const [depositAmount, setDepositAmount] = useState('')
   const [mintAmount, setMintAmount] = useState('1000')
-  const [lastHash, setLastHash] = useState<`0x${string}` | undefined>(undefined)
+  const [error, setError] = useState('')
 
   const isTestnet = chainId === 10143
   const addresses = isTestnet ? CONTRACT_ADDRESSES.monadTestnet : CONTRACT_ADDRESSES.monad
@@ -35,36 +65,25 @@ export default function DepositPage() {
   const { writeContract: createPlan, isPending: isCreating, data: createHash } = useWriteContract()
   const { writeContract: deposit, isPending: isDepositing, data: depositHash } = useWriteContract()
 
-  useWaitForTransactionReceipt({
-    hash: mintHash,
-    query: {
-      enabled: !!mintHash,
-      meta: { refresh: true },
-    },
+  useWaitForTransactionReceipt({ hash: mintHash, query: { enabled: !!mintHash } })
+  useWaitForTransactionReceipt({ hash: approveHash, query: { enabled: !!approveHash } })
+  useWaitForTransactionReceipt({ hash: createHash, query: { enabled: !!createHash } })
+  useWaitForTransactionReceipt({ hash: depositHash, query: { enabled: !!depositHash } })
+
+  const { data: isVerified } = useReadContract({
+    address: addresses.studentIdentity as `0x${string}`,
+    abi: STUDENT_IDENTITY_ABI,
+    functionName: 'isVerified',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
   })
 
-  useWaitForTransactionReceipt({
-    hash: approveHash,
-    query: {
-      enabled: !!approveHash,
-      meta: { refresh: true },
-    },
-  })
-
-  useWaitForTransactionReceipt({
-    hash: createHash,
-    query: {
-      enabled: !!createHash,
-      meta: { refresh: true },
-    },
-  })
-
-  useWaitForTransactionReceipt({
-    hash: depositHash,
-    query: {
-      enabled: !!depositHash,
-      meta: { refresh: true },
-    },
+  const { data: plan } = useReadContract({
+    address: addresses.depositPool as `0x${string}`,
+    abi: DEPOSIT_PLAN_ABI,
+    functionName: 'plans',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
   })
 
   const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
@@ -99,7 +118,10 @@ export default function DepositPage() {
     query: { enabled: !!address },
   })
 
+  const hasPlan = plan?.active
+
   const handleMint = () => {
+    setError('')
     if (!address) return
     mintUsdc({
       address: addresses.usdc as `0x${string}`,
@@ -107,13 +129,21 @@ export default function DepositPage() {
       functionName: 'mint',
       args: [address, parseUnits(mintAmount, 6)],
     }, {
-      onSuccess: () => {
-        setTimeout(() => refetchBalance(), 2000)
-      }
+      onSuccess: () => setTimeout(() => refetchBalance(), 2000),
+      onError: (err: any) => setError(err?.message || 'Mint failed'),
     })
   }
 
   const handleCreatePlan = () => {
+    setError('')
+    if (!isVerified) {
+      setError('You must verify your student identity first. Go to /verify.')
+      return
+    }
+    if (hasPlan) {
+      setError('You already have an active deposit plan. Switch to Monthly Deposit.')
+      return
+    }
     createPlan({
       address: addresses.depositPool as `0x${string}`,
       abi: DEPOSIT_POOL_ABI,
@@ -125,11 +155,13 @@ export default function DepositPage() {
           refetchDeposited()
           refetchMonths()
         }, 2000)
-      }
+      },
+      onError: (err: any) => setError(err?.message || 'Create plan failed'),
     })
   }
 
   const handleApprove = () => {
+    setError('')
     if (!address) return
     approveUsdc({
       address: addresses.usdc as `0x${string}`,
@@ -137,13 +169,13 @@ export default function DepositPage() {
       functionName: 'approve',
       args: [addresses.depositPool, parseUnits(depositAmount || '0', 6)],
     }, {
-      onSuccess: () => {
-        setTimeout(() => refetchAllowance(), 2000)
-      }
+      onSuccess: () => setTimeout(() => refetchAllowance(), 2000),
+      onError: (err: any) => setError(err?.message || 'Approve failed'),
     })
   }
 
   const handleDeposit = () => {
+    setError('')
     deposit({
       address: addresses.depositPool as `0x${string}`,
       abi: DEPOSIT_POOL_ABI,
@@ -157,7 +189,8 @@ export default function DepositPage() {
           refetchMonths()
           refetchAllowance()
         }, 2000)
-      }
+      },
+      onError: (err: any) => setError(err?.message || 'Deposit failed'),
     })
   }
 
@@ -178,6 +211,34 @@ export default function DepositPage() {
         <h1 className="text-3xl font-bold tracking-tight">Deposit</h1>
         <p className="text-muted-foreground">Set up your recurring deposit plan and start saving.</p>
       </div>
+
+      {!isVerified && (
+        <Card className="border-red-500/50 bg-red-50 dark:bg-red-950/20">
+          <CardContent className="pt-6 flex items-center justify-between">
+            <div>
+              <p className="font-medium text-red-600 dark:text-red-400">Not Verified</p>
+              <p className="text-sm text-muted-foreground">Verify your student identity to create a plan.</p>
+            </div>
+            <Link href="/verify"><Button variant="outline">Go to Verify</Button></Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {hasPlan && (
+        <Card className="border-green-500/50 bg-green-50 dark:bg-green-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-green-600 dark:text-green-400">Active Plan</p>
+                <p className="text-sm text-muted-foreground">
+                  Tenor: {plan?.tenorMonths.toString()} months | Min: ${formatNumber(plan?.minimumDeposit, 6)}/mo
+                </p>
+              </div>
+              <Badge variant="default">Active</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -200,6 +261,14 @@ export default function DepositPage() {
         </Card>
       </div>
 
+      {error && (
+        <Card className="border-red-500/50">
+          <CardContent className="pt-6">
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {isTestnet && (
         <Card className="border-dashed border-yellow-500/50">
           <CardHeader>
@@ -220,7 +289,7 @@ export default function DepositPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="create" className="space-y-6">
+      <Tabs defaultValue={hasPlan ? 'deposit' : 'create'} className="space-y-6">
         <TabsList>
           <TabsTrigger value="create">Create Plan</TabsTrigger>
           <TabsTrigger value="deposit">Monthly Deposit</TabsTrigger>
@@ -233,47 +302,56 @@ export default function DepositPage() {
               <CardDescription>Choose your tenor and minimum monthly deposit.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Plan Duration (Tenor)</Label>
-                <Select value={tenor} onValueChange={(v) => setTenor(v || '48')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TENOR_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Minimum Monthly Deposit (USDC)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  placeholder="10"
-                  value={minDeposit}
-                  onChange={(e) => setMinDeposit(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  You must deposit at least this amount every 30 days
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-muted p-4 space-y-2">
-                <p className="text-sm font-medium">Plan Summary</p>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Tenor: {parseInt(tenor)} months</p>
-                  <p>Minimum: ${minDeposit}/month</p>
-                  <p>Total at maturity: ${parseInt(minDeposit) * parseInt(tenor)}</p>
-                  <p>Yield: Variable (from staking)</p>
+              {hasPlan ? (
+                <div className="rounded-lg bg-muted p-4">
+                  <p className="text-sm font-medium">You already have an active plan!</p>
+                  <p className="text-sm text-muted-foreground">Switch to the Monthly Deposit tab to make deposits.</p>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Plan Duration (Tenor)</Label>
+                    <Select value={tenor} onValueChange={(v) => setTenor(v || '48')}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TENOR_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <Button className="w-full" size="lg" onClick={handleCreatePlan} disabled={isCreating}>
-                {isCreating ? 'Creating...' : 'Create Plan'}
-              </Button>
+                  <div className="space-y-2">
+                    <Label>Minimum Monthly Deposit (USDC)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="10"
+                      value={minDeposit}
+                      onChange={(e) => setMinDeposit(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      You must deposit at least this amount every deposit interval
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg bg-muted p-4 space-y-2">
+                    <p className="text-sm font-medium">Plan Summary</p>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <p>Tenor: {parseInt(tenor)} months</p>
+                      <p>Minimum: ${minDeposit}/deposit</p>
+                      <p>Total at maturity: ${parseInt(minDeposit) * parseInt(tenor)}</p>
+                      <p>Yield: Variable (from staking)</p>
+                    </div>
+                  </div>
+
+                  <Button className="w-full" size="lg" onClick={handleCreatePlan} disabled={isCreating || !isVerified}>
+                    {isCreating ? 'Creating...' : 'Create Plan'}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -282,40 +360,49 @@ export default function DepositPage() {
           <Card>
             <CardHeader>
               <CardTitle>Monthly Deposit</CardTitle>
-              <CardDescription>Make your recurring monthly deposit.</CardDescription>
+              <CardDescription>Make your recurring deposit.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Amount (USDC)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  placeholder="10"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                />
-              </div>
-
-              <div className="rounded-lg bg-muted p-4 space-y-1">
-                <p className="text-sm text-muted-foreground">
-                  Your deposit will be auto-staked to earn yield.
-                  You can borrow up to 70% of your total deposits.
-                </p>
-                {needsApproval && (
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                    You need to approve USDC spending before depositing.
-                  </p>
-                )}
-              </div>
-
-              {needsApproval ? (
-                <Button className="w-full" size="lg" onClick={handleApprove} disabled={isApproving}>
-                  {isApproving ? 'Approving...' : 'Approve USDC'}
-                </Button>
+              {!hasPlan ? (
+                <div className="rounded-lg bg-muted p-4">
+                  <p className="text-sm font-medium">No active plan!</p>
+                  <p className="text-sm text-muted-foreground">Create a deposit plan first.</p>
+                </div>
               ) : (
-                <Button className="w-full" size="lg" onClick={handleDeposit} disabled={isDepositing || !depositAmount}>
-                  {isDepositing ? 'Depositing...' : 'Deposit'}
-                </Button>
+                <>
+                  <div className="space-y-2">
+                    <Label>Amount (USDC)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="10"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="rounded-lg bg-muted p-4 space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Your deposit will be auto-staked to earn yield.
+                      You can borrow up to 70% of your total deposits.
+                    </p>
+                    {needsApproval && (
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                        You need to approve USDC spending before depositing.
+                      </p>
+                    )}
+                  </div>
+
+                  {needsApproval ? (
+                    <Button className="w-full" size="lg" onClick={handleApprove} disabled={isApproving}>
+                      {isApproving ? 'Approving...' : 'Approve USDC'}
+                    </Button>
+                  ) : (
+                    <Button className="w-full" size="lg" onClick={handleDeposit} disabled={isDepositing || !depositAmount}>
+                      {isDepositing ? 'Depositing...' : 'Deposit'}
+                    </Button>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
