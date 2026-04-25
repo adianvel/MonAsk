@@ -42,4 +42,18 @@ contract StudentIdentity is Ownable {
         isVerified[student] = false;
         emit StudentRevoked(student);
     }
+
+    function selfVerify(string memory emailDomain) external {
+        require(!isVerified[msg.sender], "Already verified");
+        require(bytes(emailDomain).length > 0, "Invalid domain");
+
+        _nextTokenId++;
+        isVerified[msg.sender] = true;
+        studentTokenId[msg.sender] = _nextTokenId;
+        studentEmailDomain[msg.sender] = emailDomain;
+        studentCardHash[msg.sender] = keccak256(abi.encodePacked(msg.sender));
+        verificationTime[msg.sender] = block.timestamp;
+
+        emit StudentVerified(msg.sender, emailDomain, _nextTokenId);
+    }
 }

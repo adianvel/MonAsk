@@ -1,8 +1,8 @@
 export const CONTRACT_ADDRESSES = {
   monadTestnet: {
-    studentIdentity: '0x36DD5320540e03Bc5d2A28A57CF680C64C4DAa70',
-    depositPool: '0x4619cd5838ee884538367fFd82033DF0e5CC1e37',
-    monAsk: '0x182628cA13d3769C107B9b75A6617b281DE6ac08',
+    studentIdentity: '0xeef4fa2d52eB8B2B7B82d06007eE6526960025eA',
+    depositPool: '0x8628ff2f1DfEd9b4e30c13e04833116944BABFfe',
+    monAsk: '0x26337B3E8C445e9E90E5A77ff446c14AcCE5673C',
     usdc: '0x738BdF6a38f28453e07bDeFB5221aFf682965C76',
   },
   monad: {

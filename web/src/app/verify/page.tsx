@@ -1,18 +1,59 @@
 'use client'
 
 import { useState } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useWriteContract, useReadContract } from 'wagmi'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { CONTRACT_ADDRESSES } from '@/lib/contracts'
+
+const STUDENT_IDENTITY_ABI = [
+  {
+    inputs: [{ internalType: 'string', name: 'emailDomain', type: 'string' }],
+    name: 'selfVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    name: 'isVerified',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
 
 export default function VerifyPage() {
-  const { isConnected } = useAccount()
+  const { address, isConnected, chainId } = useAccount()
   const [email, setEmail] = useState('')
-  const [cardFile, setCardFile] = useState<File | null>(null)
-  const [isVerified, setIsVerified] = useState(false)
+
+  const isTestnet = chainId === 10143
+  const addresses = isTestnet ? CONTRACT_ADDRESSES.monadTestnet : CONTRACT_ADDRESSES.monad
+
+  const { writeContract: selfVerify, isPending: isVerifying } = useWriteContract()
+
+  const { data: isVerified } = useReadContract({
+    address: addresses.studentIdentity as `0x${string}`,
+    abi: STUDENT_IDENTITY_ABI,
+    functionName: 'isVerified',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  })
+
+  const handleVerify = () => {
+    if (!email) return
+    const domain = email.split('@')[1]
+    if (!domain) return
+    selfVerify({
+      address: addresses.studentIdentity as `0x${string}`,
+      abi: STUDENT_IDENTITY_ABI,
+      functionName: 'selfVerify',
+      args: [domain],
+    })
+  }
 
   if (!isConnected) {
     return (
@@ -48,9 +89,9 @@ export default function VerifyPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Submit Verification</CardTitle>
+          <CardTitle>Self Verification</CardTitle>
           <CardDescription>
-            Your data is verified off-chain. Only a verification proof is stored on-chain.
+            Enter your university email to verify instantly on-chain.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -67,32 +108,18 @@ export default function VerifyPage() {
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label>Student ID Card</Label>
-            <div className="flex items-center gap-4">
-              <Input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setCardFile(e.target.files?.[0] ?? null)}
-                className="flex-1"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Upload a clear photo of your student ID card
-            </p>
-          </div>
-
           <div className="rounded-lg bg-muted p-4 space-y-1">
             <p className="text-sm font-medium">Verification Process</p>
             <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1">
-              <li>Submit email + student ID card</li>
-              <li>Admin verifies your identity</li>
-              <li>Verification proof minted on-chain</li>
+              <li>Enter your university email</li>
+              <li>Click verify — proof stored on-chain instantly</li>
               <li>Start depositing and borrowing</li>
             </ol>
           </div>
 
-          <Button className="w-full" size="lg">Submit for Verification</Button>
+          <Button className="w-full" size="lg" onClick={handleVerify} disabled={isVerifying || !email}>
+            {isVerifying ? 'Verifying...' : 'Verify'}
+          </Button>
         </CardContent>
       </Card>
     </div>

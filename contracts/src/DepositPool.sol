@@ -29,6 +29,10 @@ contract DepositPool is IDepositPool, Ownable, ReentrancyGuard {
         identity = IStudentIdentity(_identity);
     }
 
+    function setIdentity(address _identity) external onlyOwner {
+        identity = IStudentIdentity(_identity);
+    }
+
     function createPlan(uint256 tenorMonths, uint256 minimumDeposit_) external {
         require(identity.isVerified(msg.sender), "Not verified");
         require(!plans[msg.sender].active, "Plan exists");

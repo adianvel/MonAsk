@@ -30,6 +30,10 @@ contract MonAsk is Ownable, ReentrancyGuard {
         depositPool = DepositPool(_depositPool);
     }
 
+    function setIdentity(address _identity) external onlyOwner {
+        identity = StudentIdentity(_identity);
+    }
+
     function getBorrowLimit(address student) public view returns (uint256) {
         uint256 totalCollateral = depositPool.getTotalDeposited(student);
         return (totalCollateral * LTV_RATIO) / 100;
